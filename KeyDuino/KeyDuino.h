@@ -6,7 +6,7 @@
 #include <stdint.h>
 #include <PN532Interface.h>
 
-//#define DEBUG
+#define DEBUG
 #define KeyDuino_READ_TIMEOUT				(1000)
 
 #define PN532_COMMAND_DIAGNOSE              (0x00)
@@ -47,6 +47,7 @@
 
 
 #define PN532_MIFARE_ISO14443A              (0x00)
+#define PN532_FELICA                        (0x01) //0x01 -> 212kbps, 0x02 -> 424 kbps
 #define PN532_ISO14443B              	    (0x03)
 
 // Mifare Commands

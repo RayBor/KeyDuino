@@ -347,7 +347,16 @@ bool KeyDuino::readPassiveTargetID(uint8_t cardbaudrate, uint8_t *uid, uint8_t *
     pn532_packetbuffer[1] = 1;  // max 1 cards at once (we can set this to 2 later)
     pn532_packetbuffer[2] = cardbaudrate;
 
-    if (HAL(writeCommand)(pn532_packetbuffer, 3)) {
+    if(cardbaudrate == PN532_FELICA){
+        //Payload
+        pn532_packetbuffer[3] = 0x00;
+        pn532_packetbuffer[4] = 0xFF;
+        pn532_packetbuffer[5] = 0xFF;
+        pn532_packetbuffer[6] = 0x01;
+        pn532_packetbuffer[7] = 0x00;
+    }
+
+    if (HAL(writeCommand)(pn532_packetbuffer, sizeof(pn532_packetbuffer))) {
         DMSG_STR("\nFailed writing");
         return 0x0;  // command failed
     }
@@ -358,40 +367,73 @@ bool KeyDuino::readPassiveTargetID(uint8_t cardbaudrate, uint8_t *uid, uint8_t *
         return 0x0;
     }
 
-    // check some basic stuff
-    /* ISO14443A card response should be in the following format:
+    // check response structure
 
-      byte            Description
-      -------------   ------------------------------------------
-      b0              Tags Found
-      b1              Tag Number (only one used in this example)
-      b2..3           SENS_RES
-      b4              SEL_RES
-      b5              NFCID Length
-      b6..NFCIDLen    NFCID
-    */
+    if(cardbaudrate == PN532_MIFARE_ISO14443A){
 
-    if (pn532_packetbuffer[0] != 1)
-        return 0;
+        /* ISO14443A card response should be in the following format:
 
-    inListedTag = pn532_packetbuffer[1];
+          byte            Description
+          -------------   ------------------------------------------
+          b0              Tags Found
+          b1              Tag Number (only one used in this example)
+          b2..3           SENS_RES
+          b4              SEL_RES
+          b5              NFCID Length
+          b6..NFCIDLen    NFCID
+        */
 
-    uint16_t sens_res = pn532_packetbuffer[2];
-    sens_res <<= 8;
-    sens_res |= pn532_packetbuffer[3];
+        if (pn532_packetbuffer[0] != 1)
+            return 0;
 
-    DMSG("\nATQA: 0x");  DMSG_HEX(sens_res);
-    DMSG("\nSAK: 0x");  DMSG_HEX(pn532_packetbuffer[4]);
-    DMSG("\n");
+        inListedTag = pn532_packetbuffer[1];
 
-    /* Card appears to be Mifare Classic */
-    *uidLength = pn532_packetbuffer[5];
-    this->_uidLen = pn532_packetbuffer[5];
+        uint16_t sens_res = pn532_packetbuffer[2];
+        sens_res <<= 8;
+        sens_res |= pn532_packetbuffer[3];
 
-    for (uint8_t i = 0; i < pn532_packetbuffer[5]; i++) {
-        uid[i] = pn532_packetbuffer[6 + i];
-	    this->_uid[i] = pn532_packetbuffer[6 + i];
+        DMSG("\nATQA: 0x");  DMSG_HEX(sens_res);
+        DMSG("\nSAK: 0x");  DMSG_HEX(pn532_packetbuffer[4]);
+        DMSG("\n");
+
+        /* Card appears to be Mifare */
+        *uidLength = pn532_packetbuffer[5];
+        this->_uidLen = pn532_packetbuffer[5];
+
+        for (uint8_t i = 0; i < pn532_packetbuffer[5]; i++) {
+            uid[i] = pn532_packetbuffer[6 + i];
+	        this->_uid[i] = pn532_packetbuffer[6 + i];
+        }
+    } else if(cardbaudrate == PN532_FELICA){
+
+        /* FeliCa response should be in the following format:
+
+          byte            Description
+          -------------   ------------------------------------------
+          b0              Tags Found
+          b1              Tag Number (only one used in this example)
+          b2              POL_RES length
+          b3              response code byte
+          b4..11          NFCID2t, always 8 bytes
+          b12..19         Manufacturer bytes
+          b20..21         Optional system code
+        */
+
+        if (pn532_packetbuffer[0] != 1)
+            return 0;
+
+        inListedTag = pn532_packetbuffer[1];
+
+        /* Card appears to be FeliCa */
+        *uidLength = 8;
+        this->_uidLen = 8;
+
+        for (uint8_t i = 0; i < 8; i++) {
+            uid[i] = pn532_packetbuffer[4 + i];
+	        this->_uid[i] = pn532_packetbuffer[4 + i];
+        }
     }
+
     return 1;
 }
 
@@ -482,6 +524,8 @@ bool KeyDuino::readPassiveTargetID_B(uint8_t *uid, uint8_t *uidLength, uint16_t 
     
     return 1;
 }
+
+
 
 
 /***** Mifare Classic Functions ******/
